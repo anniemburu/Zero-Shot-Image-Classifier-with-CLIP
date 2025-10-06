@@ -109,7 +109,7 @@ def main():
             image = Image.open(uploaded_file)
             st.session_state.uploaded_image = image
             
-            st.image(image, caption="Uploaded Image", use_column_width=True)
+            st.image(image, caption="Uploaded Image", use_container_width=True)
             
             # Image info
             st.info(f"Image size: {image.size}, Mode: {image.mode}")
