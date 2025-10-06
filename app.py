@@ -239,7 +239,7 @@ if __name__ == "__main__":
     st.markdown("---")
     st.markdown(
         "Built with ❤️ using CLIP, PyTorch, and Streamlit | "
-        "[Report Issues](https://github.com/your-username/clip-classifier/issues)"
+        "[Report Issues](https://github.com/anniemburu/image-classifier-clip/issues)"
     )
 
     st.markdown("Created by **Anne Mburu**")
