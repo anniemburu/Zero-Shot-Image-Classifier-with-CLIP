@@ -67,5 +67,11 @@ The app give you the capability of also trying few shot leaning and compare how 
 ```
 
 ## 🔎 Snip of the App
-TBA
+### Landing Page
+![Landing Page](./assests/app/landing_page.png)
 
+### Classification Result
+
+![Logo](./assests/app/classification_1.png)
+
+![Logo](./assests/app/classification_2.png)
