@@ -56,7 +56,7 @@ The app give you the capability of also trying few shot leaning and compare how 
 ├── app.py
 ├── assets/
 │   ├── example_images/
-│   │   └── #save your data here
+│   │   └── #save your image data to here
 ├── utils/
 │   ├── __init__.py
 │   ├── clip_classifier.py
