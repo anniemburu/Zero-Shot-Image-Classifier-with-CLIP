@@ -66,6 +66,9 @@ The app give you the capability of also trying few shot leaning and compare how 
 
 ```
 
+## 🚀 🚀  Use Deployed App
+You can test deployed app on [Streamlit](https://zero-shot-image-classifier-with-clip.streamlit.app/)
+
 ## 🔎 Snip of the App
 ### Landing Page
 ![Landing Page](./assets/app/landing_page.png)
