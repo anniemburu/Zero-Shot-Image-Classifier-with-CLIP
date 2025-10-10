@@ -28,6 +28,24 @@ class ZeroShotCLIPClassifier:
             text_features = self.model.encode_text(text_inputs)
 
         return text_features
+
+    def get_image_embeddings(self, images: List[Image.Image]) -> torch.Tensor:
+        """
+        Compute image embeddings for a list of PIL images
+        
+        Args:
+            images: List of PIL Image objects
+            
+        Returns:
+            Tensor of shape (N, embedding_dim)
+        """
+        # Preprocess all images and stack them into a batch
+        image_inputs = torch.stack([self.preprocess(img) for img in images]).to(self.device)
+        
+        with torch.no_grad():
+            image_features = self.model.encode_image(image_inputs)
+        
+        return image_features
     
     def predict(self, image: Image.Image, class_names: List[str]) -> Dict:
         """
@@ -76,22 +94,158 @@ class ZeroShotCLIPClassifier:
             'model_used': f'CLIP {self.model_name}'
         }
     
-    def few_shot_predict(self, image: Image.Image, 
-                        examples: List[Tuple[Image.Image, str]], 
-                        class_names: List[str]) -> Dict:
+    def few_shot_predict(self, 
+                        image: Image.Image, 
+                        examples: Dict[str, List[Image.Image]], 
+                        class_names: List[str],
+                        method: str = "prototype") -> Dict:
         """
         Few-shot prediction using example images
         
         Args:
             image: Target image to classify
-            examples: List of (example_image, class_name) tuples
+            examples: Dictionary {class_name: [list of example images]}
             class_names: Available class names
+            method: Few-shot method - "prototype" or "similarity"
             
         Returns:
             Dictionary with predictions
         """
-       
-        warnings.warn("This is a basic few-shot implementation. For production, consider more advanced methods.")
+        if method == "prototype":
+            return self._prototype_few_shot(image, examples, class_names)
+        elif method == "similarity":
+            return self._similarity_few_shot(image, examples, class_names)
+        else:
+            raise ValueError("Method must be 'prototype' or 'similarity'")
+    
+    def _prototype_few_shot(self, 
+                          image: Image.Image, 
+                          examples: Dict[str, List[Image.Image]], 
+                          class_names: List[str]) -> Dict:
+        """
+        Prototype-based few-shot learning
+        Creates class prototypes from example images and compares target image to prototypes
+        """
+        # Get embeddings for all example images
+        class_prototypes = {}
         
-
-        return self.predict(image, class_names)
+        for class_name in class_names:
+            if class_name in examples and len(examples[class_name]) > 0:
+                # Get embeddings for all examples of this class
+                example_embeddings = self.get_image_embeddings(examples[class_name])
+                
+                # Create prototype by averaging embeddings
+                prototype = example_embeddings.mean(dim=0)
+                prototype = prototype / prototype.norm(dim=-1, keepdim=True)
+                class_prototypes[class_name] = prototype
+        
+        # If no examples provided for some classes, use zero-shot for those
+        if len(class_prototypes) < len(class_names):
+            # Get zero-shot predictions for all classes
+            zero_shot_results = self.predict(image, class_names)
+            zero_shot_probs = {pred['class']: pred['probability'] 
+                             for pred in zero_shot_results['all_predictions']}
+        
+        # Get target image embedding
+        target_embedding = self.get_image_embeddings([image])[0]
+        target_embedding = target_embedding / target_embedding.norm(dim=-1, keepdim=True)
+        
+        # Calculate similarities to prototypes
+        results = []
+        for class_name in class_names:
+            if class_name in class_prototypes:
+                # Use few-shot prototype similarity
+                similarity = (100.0 * target_embedding @ class_prototypes[class_name]).item()
+                probability = torch.sigmoid(torch.tensor(similarity / 100.0)).item()
+            else:
+                # Fall back to zero-shot for classes without examples
+                probability = zero_shot_probs[class_name]
+            
+            results.append({
+                'class': class_name,
+                'probability': probability,
+                'method': 'few-shot' if class_name in class_prototypes else 'zero-shot'
+            })
+        
+        # Normalize probabilities to sum to 1
+        total_prob = sum(r['probability'] for r in results)
+        for result in results:
+            result['probability'] /= total_prob
+        
+        # Sort by probability
+        results.sort(key=lambda x: x['probability'], reverse=True)
+        
+        return {
+            'top_prediction': results[0]['class'],
+            'top_probability': results[0]['probability'],
+            'all_predictions': results,
+            'model_used': f'CLIP {self.model_name} (Few-Shot)',
+            'method_used': 'prototype'
+        }
+    
+    def _similarity_few_shot(self, 
+                           image: Image.Image, 
+                           examples: Dict[str, List[Image.Image]], 
+                           class_names: List[str]) -> Dict:
+        """
+        Similarity-based few-shot learning
+        Compares target image to each example image and aggregates similarities
+        """
+        # Get target image embedding
+        target_embedding = self.get_image_embeddings([image])[0]
+        target_embedding = target_embedding / target_embedding.norm(dim=-1, keepdim=True)
+        
+        # Calculate average similarity to examples for each class
+        class_similarities = {}
+        
+        for class_name in class_names:
+            if class_name in examples and len(examples[class_name]) > 0:
+                # Get embeddings for all examples of this class
+                example_embeddings = self.get_image_embeddings(examples[class_name])
+                example_embeddings = example_embeddings / example_embeddings.norm(dim=-1, keepdim=True)
+                
+                # Calculate similarities to all examples
+                similarities = (100.0 * target_embedding @ example_embeddings.T)
+                avg_similarity = similarities.mean().item()
+                
+                # Convert to probability using softmax over classes
+                class_similarities[class_name] = avg_similarity
+        
+        # If no examples for some classes, use zero-shot
+        if len(class_similarities) < len(class_names):
+            zero_shot_results = self.predict(image, class_names)
+            zero_shot_probs = {pred['class']: pred['probability'] 
+                             for pred in zero_shot_results['all_predictions']}
+        
+        # Combine similarities and convert to probabilities
+        results = []
+        for class_name in class_names:
+            if class_name in class_similarities:
+                # Use few-shot similarity
+                similarity = class_similarities[class_name]
+                probability = torch.sigmoid(torch.tensor(similarity / 100.0)).item()
+            else:
+                # Fall back to zero-shot
+                probability = zero_shot_probs[class_name]
+            
+            results.append({
+                'class': class_name,
+                'probability': probability,
+                'method': 'few-shot' if class_name in class_similarities else 'zero-shot'
+            })
+        
+        # Normalize probabilities
+        total_prob = sum(r['probability'] for r in results)
+        for result in results:
+            result['probability'] /= total_prob
+        
+        # Sort by probability
+        results.sort(key=lambda x: x['probability'], reverse=True)
+        
+        return {
+            'top_prediction': results[0]['class'],
+            'top_probability': results[0]['probability'],
+            'all_predictions': results,
+            'model_used': f'CLIP {self.model_name} (Few-Shot)',
+            'method_used': 'similarity'
+        }
