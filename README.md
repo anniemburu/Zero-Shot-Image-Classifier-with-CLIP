@@ -1,4 +1,4 @@
-# Zero Shot Classification with CLIP
+# Zero-Shot Image Classification with CLIP
 
 ## 📌 Project Overview  
 A powerful web application that classifies images using OpenAI's CLIP model without any training required. Compare zero-shot capabilities with traditional models like ResNet and EfficientNet.
@@ -56,7 +56,7 @@ The app give you the capability of also trying few shot leaning and compare how 
 ├── app.py
 ├── assets/
 │   ├── example_images/
-│   │   └── #save your data here
+│   │   └── #save your image data to here
 ├── utils/
 │   ├── __init__.py
 │   ├── clip_classifier.py
@@ -67,5 +67,11 @@ The app give you the capability of also trying few shot leaning and compare how 
 ```
 
 ## 🔎 Snip of the App
-TBA
+### Landing Page
+![Landing Page](./assets/app/landing_page.png)
 
+### Classification Result
+
+![Logo](./assets/app/classification_1.png)
+
+![Logo](./assets/app/classification_2.png)
